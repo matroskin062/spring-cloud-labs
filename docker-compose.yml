@@ -1,0 +1,86 @@
+version: '3'
+
+services:
+        backend:
+                depends_on:
+                        - eureka-server
+                container_name: backend
+                build:
+                        context: ./docker
+                        dockerfile: spring.dockerfile
+                volumes:
+                        - ./rest-service/rest-service:/app
+                ports:
+                        - "8081:80"
+                command: sh -c "/usr/bin/java -jar /app/target/rest-service-0.0.1-SNAPSHOT.jar"
+
+        eureka-server:
+                depends_on:
+                        - db
+                container_name: eureka-server
+                build:
+                        context: ./docker
+                        dockerfile: spring.dockerfile
+                volumes:
+                        - ./eureka/eureka:/app
+                ports:
+                  - "8761:8761"
+                command: sh -c "/usr/bin/java -jar /app/target/eureka-0.0.1-SNAPSHOT.jar"
+        eureka-client:
+                depends_on:
+                        - config-server
+                        - rabbit-mq
+                        - eureka-server
+                        - rabbit-mq-consumer
+                container_name: eureka-client
+                ports:
+                        - "8080:80"
+                build:
+                        context: docker
+                        dockerfile: spring.dockerfile
+                volumes:
+                        - ./client/client:/app
+                command: sh -c "/cmd/awaiter.sh && /usr/bin/java -jar /app/target/client-0.0.1-SNAPSHOT.jar"
+
+        config-server:
+                depends_on:
+                  - rabbit-mq
+                build:
+                  context: docker
+                  dockerfile: spring.dockerfile
+                container_name: config-server
+                volumes:
+                        - ./config-server/config-server:/app
+                ports:
+                  - "9999:8888"
+                command: sh -c "/usr/bin/java -jar /app/target/config-server-0.0.1-SNAPSHOT.jar"
+        rabbit-mq:
+                image: rabbitmq:3.8.0-beta.3-management
+                hostname: rabbit-mq
+                container_name: rabbit-mq
+                environment:
+                        RABBITMQ_ERLANG_COOKIE: secret
+                        RABBITMQ_NODENAME: rabbit@rabbit-mq
+        rabbit-mq-consumer:
+                depends_on:
+                  - rabbit-mq
+                build:
+                        context: ./docker
+                        dockerfile: spring.dockerfile
+                container_name: rabbit-mq-consumer
+                volumes:
+                        - ./consumer/consumer:/app
+                command: sh -c "sleep 10 && /usr/bin/java -jar /app/target/consumer-0.0.1-SNAPSHOT.jar"
+        db:
+                container_name: db
+                image: mysql:5.7
+                volumes:
+                        - db_data:/var/lib/mysql
+                environment:
+                        MYSQL_ROOT_PASSWORD: dopeclub
+                        MYSQL_DATABASE: servicelabs
+                ports:
+                        - "33061:3306"
+volumes:
+        db_data:
+        maven_cache:
